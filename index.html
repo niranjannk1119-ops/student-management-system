@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173b70">
+  <meta name="description" content="Niru Study Notes - phone login and admin approval demo">
+  <title>Niru Study Notes | New Website Demo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="brand">
+    <div class="logo-mark" aria-hidden="true">N</div>
+    <div><h1>Niru Study Notes</h1><p>Learn • Practice • Succeed</p></div>
+  </div>
+  <div class="header-actions">
+    <span class="header-tag">New student portal</span>
+    <button class="secondary small" id="adminShortcut" type="button">Admin demo</button>
+  </div>
+</header>
+
+<main>
+  <section class="hero card">
+    <div>
+      <span class="eyebrow">YOUR LEARNING SPACE</span>
+      <h2>Study with focus.<br><span class="blue">Grow with confidence.</span></h2>
+      <p class="muted">Access your study materials, track your learning, and stay connected with Niru Study Notes.</p>
+      <div class="hero-points"><span>✓ B.Sc. study resources</span><span>✓ Student approval system</span><span>✓ Secure account requests</span></div>
+    </div>
+    <div class="hero-art"><div class="book">N</div><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><span class="art-caption">Your goals start here</span></div>
+  </section>
+
+  <div id="notice" class="notice" role="status" aria-live="polite"></div>
+
+  <section id="authView" class="auth-layout">
+    <div class="auth-intro">
+      <span class="eyebrow">WELCOME BACK</span>
+      <h2>Your studies,<br>all in one place.</h2>
+      <p>Sign in with your registered mobile number. New students can request access after registering.</p>
+      <div class="feature-list"><div>🔐 <span>Phone number account</span></div><div>🛡️ <span>Admin-reviewed registration</span></div><div>📚 <span>Study materials after approval</span></div></div>
+    </div>
+    <div class="auth-cards">
+      <form id="loginForm" class="card form-card">
+        <h3>Student login</h3><p class="muted">Enter your mobile number and password.</p>
+        <label>Phone number<input id="loginPhone" type="tel" inputmode="numeric" placeholder="10-digit mobile number" maxlength="10" required></label>
+        <label>Password<input id="loginPassword" type="password" placeholder="Enter your password" required></label>
+        <button class="full-button" type="submit">Login</button>
+        <button class="text-button full-text" id="forgotLink" type="button">Forgot password?</button>
+        <p class="switch-form">New student? <button class="text-button" id="showRegister" type="button">Create an account</button></p>
+      </form>
+
+      <form id="registerForm" class="card form-card hidden">
+        <h3>New student registration</h3><p class="muted">Submit your details for admin approval.</p>
+        <label>Full name<input id="regName" type="text" placeholder="Enter your full name" required></label>
+        <label>Phone number<input id="regPhone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" required></label>
+        <label>Create password<input id="regPassword" type="password" minlength="8" placeholder="At least 8 characters" required></label>
+        <label>Confirm password<input id="regConfirm" type="password" minlength="8" placeholder="Re-enter password" required></label>
+        <p class="help-text">This is a design demo. Real account creation and secure password storage must be connected to Firebase before publishing.</p>
+        <button class="full-button" type="submit">Submit registration request</button>
+        <p class="switch-form">Already registered? <button class="text-button" id="showLogin" type="button">Back to login</button></p>
+      </form>
+
+      <form id="forgotForm" class="card form-card hidden">
+        <h3>Forgot password?</h3><p class="muted">Send a password-reset request to the admin.</p>
+        <label>Registered phone number<input id="forgotPhone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" required></label>
+        <button class="full-button" type="submit">Send request to admin</button>
+        <p class="help-text">The admin will review your request. You will be notified when it is ready.</p>
+        <p class="switch-form"><button class="text-button" id="forgotBack" type="button">Back to login</button></p>
+      </form>
+    </div>
+  </section>
+
+  <section id="studentView" class="hidden">
+    <div class="section-heading card">
+      <div><span class="eyebrow">STUDENT PORTAL</span><h2 id="studentWelcome">Welcome</h2><p class="muted">Your account and learning dashboard.</p></div>
+      <button class="secondary" id="studentLogout" type="button">Log out</button>
+    </div>
+    <div class="dashboard-grid">
+      <article class="card"><div class="tile-icon">📚</div><h3>Study materials</h3><p class="muted">Your approved study library will appear here.</p><div id="materialsArea" class="empty-state">Study materials are available after your account is approved.</div></article>
+      <article class="card"><div class="tile-icon">🛡️</div><h3>Account status</h3><p id="studentStatus" class="status-pill pending">Pending approval</p><p class="muted">Your access depends on the admin's approval.</p></article>
+    </div>
+    <div class="card">
+      <h3>Password settings</h3><p class="muted">Request a password change. Your proposed password is not sent to or stored for the admin.</p>
+      <form id="changePasswordForm" class="inline-form">
+        <label>New password<input id="newPassword" type="password" minlength="8" placeholder="At least 8 characters" required></label>
+        <label>Confirm new password<input id="confirmNewPassword" type="password" minlength="8" placeholder="Re-enter new password" required></label>
+        <button type="submit">Submit change request</button>
+      </form>
+      <p class="help-text">After approval, sign in again and enter the proposed password to activate it securely. This demo only previews the workflow.</p>
+      <div id="studentRequests" class="request-list"></div>
+    </div>
+  </section>
+
+  <section id="adminView" class="hidden">
+    <div class="section-heading card">
+      <div><span class="eyebrow">ADMIN CONTROL PANEL</span><h2>Admin dashboard</h2><p class="muted">Review student registrations and password requests.</p></div>
+      <div class="button-row"><button class="secondary" id="backToLogin" type="button">Student page</button><button class="danger-button" id="adminLogout" type="button">Exit admin</button></div>
+    </div>
+    <div class="stats-grid">
+      <div class="stat card"><span>Pending students</span><strong id="pendingCount">0</strong></div>
+      <div class="stat card"><span>Password requests</span><strong id="passwordCount">0</strong></div>
+      <div class="stat card"><span>Approved students</span><strong id="approvedCount">0</strong></div>
+    </div>
+    <div class="card"><div class="section-title"><div><h3>Student registrations</h3><p class="muted">Approve or reject access requests.</p></div></div><div id="registrationRequests" class="request-list"></div></div>
+    <div class="card"><div class="section-title"><div><h3>Password requests</h3><p class="muted">Review reset and change requests. The proposed password is never displayed.</p></div></div><div id="passwordRequests" class="request-list"></div></div>
+    <div class="card"><h3>Admin-initiated password reset</h3><p class="muted">Admin can initiate a reset without a student request. The student must set the new password through a secure account flow.</p>
+      <form id="adminResetForm" class="inline-form"><label>Student phone number<input id="adminResetPhone" type="tel" inputmode="numeric" maxlength="10" placeholder="Registered mobile number" required></label><button type="submit">Create reset instruction</button></form>
+      <div id="adminResetResult" class="help-text"></div>
+    </div>
+  </section>
+  <footer><strong>Niru Study Notes</strong><span>New website prototype • Existing website remains unchanged</span></footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
