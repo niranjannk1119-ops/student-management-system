@@ -17,7 +17,7 @@ const firebaseConfig = {
   appId: "1:497405407178:web:f3a7398d172e5381112933",
   measurementId: "G-5KCS77Y8QC"
 };
-const ADMIN_UID = "qeHYqJolAaO38gunIgBk8bv2lB93";
+const ADMIN_UID = "Kbh5nTxWNgf2ObLIXfGhJ5O4YfG3";
 const ADMIN_PHONE = "7483819617";
 const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getFirestore(app);
 const $ = id => document.getElementById(id);
