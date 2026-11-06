@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function isAdmin() {
-      return signedIn() && request.auth.uid == "qeHYqJolAaO38gunIgBk8bv2lB93";
+      return signedIn() && request.auth.uid == "Kbh5nTxWNgf2ObLIXfGhJ5O4YfG3";
     }
     function userDoc(uid) {
       return get(/databases/$(database)/documents/users/$(uid)).data;
