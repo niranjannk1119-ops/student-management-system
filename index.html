@@ -7,54 +7,94 @@
 <link rel="stylesheet" href="style.css"><title>Niru Study Notes</title>
 
 <style>
+  /* Compact account panel: the nature image is the background. */
   .account-background {
     position: relative;
     display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    min-height: 360px;
-    padding: 24px;
+    align-items: center;
+    min-height: 0;
+    height: auto;
+    padding: 14px;
     box-sizing: border-box;
     overflow: hidden;
     background-size: cover;
     background-position: center;
+    border-radius: 22px;
   }
   .account-overlay {
     position: relative;
     z-index: 2;
     width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 18px;
-    padding: 22px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
+    padding: 14px 18px;
     box-sizing: border-box;
     color: #fff;
-    border: 1px solid rgba(255,255,255,.72);
-    border-radius: 24px;
-    background: rgba(15, 45, 75, .42);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 10px 30px rgba(0,0,0,.16);
+    border: 1px solid rgba(255,255,255,.78);
+    border-radius: 17px;
+    background: rgba(12, 39, 68, .43);
+    -webkit-backdrop-filter: blur(9px);
+    backdrop-filter: blur(9px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.14);
   }
-  .account-overlay .account-details { min-width: 0; }
-  .account-overlay .eyebrow,
-  .account-overlay h2,
-  .account-overlay p { color: #fff; }
-  .account-overlay h2 { overflow-wrap: anywhere; margin: 8px 0; }
-  .account-overlay #studentEmail { overflow-wrap: anywhere; }
-  .account-overlay .status { display: inline-block; }
-  .account-overlay .account-signout {
-    flex: 0 0 auto;
+  .account-label {
     color: #fff;
-    border: 1px solid rgba(255,255,255,.85);
+    font-size: .82rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+  }
+  .account-name-row,
+  .account-email-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 14px;
+  }
+  .account-overlay .account-name-row h2 {
+    color: #fff;
+    margin: 0;
+    font-size: clamp(1.15rem, 4vw, 1.65rem);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+  .account-overlay #studentEmail {
+    color: #fff;
+    margin: 0;
+    font-size: clamp(.78rem, 2.7vw, 1rem);
+    overflow-wrap: anywhere;
+  }
+  .account-overlay #studentStatus {
+    display: inline-flex;
+    justify-self: end;
+    align-items: center;
+    margin: 0;
+    white-space: nowrap;
+    padding: 7px 11px;
+    border-radius: 999px;
+    color: #075c43;
+    background: #d9f8e9;
+    font-size: .82rem;
+  }
+  .account-overlay .account-signout {
+    justify-self: end;
+    white-space: nowrap;
+    padding: 8px 13px;
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.88);
     background: rgba(255,255,255,.16);
   }
+  .student-dashboard-hero { margin-top: 16px; }
   @media (max-width: 600px) {
-    .account-background { min-height: 310px; padding: 16px; }
-    .account-overlay { align-items: flex-start; flex-direction: column; padding: 18px; gap: 10px; }
-    .account-overlay h2 { font-size: clamp(1.35rem, 6vw, 2rem); }
-    .account-overlay #studentEmail { font-size: .95rem; }
+    .account-background { padding: 10px; border-radius: 18px; }
+    .account-overlay { padding: 12px 13px; gap: 6px; border-radius: 14px; }
+    .account-name-row,
+    .account-email-row { column-gap: 8px; }
+    .account-overlay .account-name-row h2 { font-size: clamp(1rem, 4.5vw, 1.35rem); }
+    .account-overlay #studentEmail { font-size: clamp(.68rem, 2.8vw, .86rem); }
+    .account-overlay #studentStatus { padding: 6px 8px; font-size: .72rem; }
+    .account-overlay .account-signout { padding: 7px 9px; font-size: .78rem; }
+    .student-dashboard-hero { margin-top: 13px; }
   }
 </style>
 
@@ -65,15 +105,6 @@
   <div class="brand-copy"><h1>Niru Study Notes</h1><p>Learn • Grow • Succeed</p></div>
 </header>
 <main class="wrap">
-  <section class="hero">
-    <div class="hero-shade"></div><div class="hero-copy">
-      <span class="eyebrow">YOUR LEARNING JOURNEY</span>
-      <h2>Welcome to Niru Study Notes</h2>
-      <p>Learn with confidence. Grow with knowledge. Build your future.</p>
-      <p>Study resources for B.Sc. PCM students.</p>
-    </div>
-  </section>
-
   <div id="notice" class="notice" role="status" aria-live="polite"></div>
 
   <section id="authView" class="auth-wrap">
@@ -110,13 +141,24 @@
   <section id="studentView" class="hidden">
     <section class="student-welcome-image account-background" aria-label="Student account over nature background">
       <div class="account-overlay">
-        <div class="account-details">
-          <span class="eyebrow">YOUR ACCOUNT</span>
+        <div class="account-label">YOUR ACCOUNT</div>
+        <div class="account-name-row">
           <h2 id="studentWelcome">Student account</h2>
-          <p id="studentEmail"> </p>
           <p id="studentStatus" class="status pending">Pending approval</p>
         </div>
-        <button id="studentLogout" class="soft-button account-signout" type="button">Sign Out</button>
+        <div class="account-email-row">
+          <p id="studentEmail"> </p>
+          <button id="studentLogout" class="soft-button account-signout" type="button">Sign Out</button>
+        </div>
+      </div>
+    </section>
+    <section class="hero student-dashboard-hero">
+      <div class="hero-shade"></div>
+      <div class="hero-copy">
+        <span class="eyebrow">YOUR LEARNING JOURNEY</span>
+        <h2>Welcome to Niru Study Notes</h2>
+        <p>Learn with confidence. Grow with knowledge. Build your future.</p>
+        <p>Study resources for B.Sc. PCM students.</p>
       </div>
     </section>
     <section class="card"><span class="eyebrow blue-text">YOUR STUDY SPACE</span><h2>Study Library</h2><p class="muted">Choose a semester to find your resources.</p>
