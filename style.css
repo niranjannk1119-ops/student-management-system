@@ -85,3 +85,21 @@ body.auth-mode .text-button{font-weight:700}
     margin: 4px 0;
   }
 }
+
+
+/* Reduce the heavy dark overlay on the mobile Learning Journey banner.
+   Keep the existing image and white text, but let the sunset colours show. */
+@media (max-width: 650px) {
+  .student-dashboard-hero {
+    background-image: url("assets/nature-sunrise-background.png");
+  }
+
+  .student-dashboard-hero .hero-shade {
+    background: linear-gradient(
+      90deg,
+      rgba(0, 0, 0, .10),
+      rgba(0, 0, 0, .02) 55%,
+      transparent
+    );
+  }
+}
