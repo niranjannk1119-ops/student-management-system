@@ -21,18 +21,6 @@
     </div>
   </section>
 
-  <section class="music-card card">
-    <div class="music-cover-wrap"><img src="assets/built-for-more-cover.jpeg" alt="Built for More music cover" class="music-cover"></div>
-    <div class="music-info"><h2>A peaceful place to study</h2><p>Enjoy your selected music while you learn.</p>
-      <div class="music-controls">
-        <button id="musicPlay" class="soft-button" type="button">▶ Play music</button>
-        <button id="musicStop" class="soft-button" type="button">■ Stop</button>
-        <span id="musicStatus" class="muted small">Ready to play</span>
-      </div>
-      <audio id="studyAudio" preload="metadata" src="assets/login-song.mpeg"></audio>
-    </div>
-  </section>
-
   <div id="notice" class="notice" role="status" aria-live="polite"></div>
 
   <section id="authView" class="auth-wrap">
@@ -67,13 +55,25 @@
   </section>
 
   <section id="studentView" class="hidden">
+    <div class="card section-head"><div><span class="eyebrow blue-text">YOUR ACCOUNT</span><h2 id="studentWelcome">Student account</h2><p id="studentEmail" class="muted"></p><p id="studentStatus" class="status pending">Pending approval</p></div><button id="studentLogout" class="soft-button">Sign Out</button></div>
     <section class="student-welcome-image" aria-label="Student dashboard welcome image">
       <div class="student-welcome-overlay"><span class="eyebrow">WELCOME TO YOUR STUDY SPACE</span><h2>Learn • Grow • Succeed</h2><p>Your journey to knowledge starts here.</p></div>
     </section>
-    <div class="card section-head"><div><span class="eyebrow blue-text">YOUR ACCOUNT</span><h2 id="studentWelcome">Student account</h2><p id="studentEmail" class="muted"></p><p id="studentStatus" class="status pending">Pending approval</p></div><button id="studentLogout" class="soft-button">Sign Out</button></div>
     <section class="card"><span class="eyebrow blue-text">YOUR STUDY SPACE</span><h2>Study Library</h2><p class="muted">Choose a semester to find your resources.</p>
       <div class="semester-tabs" id="studentSemesterTabs"></div><div id="studentMaterials" class="material-grid"></div>
     </section>
+  <section class="music-card card">
+    <div class="music-cover-wrap"><img src="assets/built-for-more-cover.jpeg" alt="Built for More music cover" class="music-cover"></div>
+    <div class="music-info"><h2>A peaceful place to study</h2><p>Enjoy your selected music while you learn.</p>
+      <div class="music-controls">
+        <button id="musicPlay" class="soft-button" type="button">▶ Play music</button>
+        <button id="musicStop" class="soft-button" type="button">■ Stop</button>
+        <span id="musicStatus" class="muted small">Ready to play</span>
+      </div>
+      <audio id="studyAudio" preload="metadata" src="assets/login-song.mpeg"></audio>
+    </div>
+  </section>
+
     <section class="card"><h2>Password settings</h2><p class="muted">Change your password after signing in.</p>
       <form id="changePasswordForm" class="inline-form"><label>New password<input id="newPassword" type="password" minlength="8" required></label><label>Confirm password<input id="confirmNewPassword" type="password" minlength="8" required></label><button class="primary" type="submit">Update password</button></form>
     </section>
