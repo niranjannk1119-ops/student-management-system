@@ -5,6 +5,59 @@
 <meta name="theme-color" content="#083e75"><meta name="description" content="Niru Study Notes student learning portal">
 <link rel="icon" type="image/png" href="assets/niru-study-notes-logo.png">
 <link rel="stylesheet" href="style.css"><title>Niru Study Notes</title>
+
+<style>
+  .account-background {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 360px;
+    padding: 24px;
+    box-sizing: border-box;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+  }
+  .account-overlay {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 22px;
+    box-sizing: border-box;
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.72);
+    border-radius: 24px;
+    background: rgba(15, 45, 75, .42);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 30px rgba(0,0,0,.16);
+  }
+  .account-overlay .account-details { min-width: 0; }
+  .account-overlay .eyebrow,
+  .account-overlay h2,
+  .account-overlay p { color: #fff; }
+  .account-overlay h2 { overflow-wrap: anywhere; margin: 8px 0; }
+  .account-overlay #studentEmail { overflow-wrap: anywhere; }
+  .account-overlay .status { display: inline-block; }
+  .account-overlay .account-signout {
+    flex: 0 0 auto;
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.85);
+    background: rgba(255,255,255,.16);
+  }
+  @media (max-width: 600px) {
+    .account-background { min-height: 310px; padding: 16px; }
+    .account-overlay { align-items: flex-start; flex-direction: column; padding: 18px; gap: 10px; }
+    .account-overlay h2 { font-size: clamp(1.35rem, 6vw, 2rem); }
+    .account-overlay #studentEmail { font-size: .95rem; }
+  }
+</style>
+
 </head>
 <body>
 <header class="topbar">
@@ -55,9 +108,16 @@
   </section>
 
   <section id="studentView" class="hidden">
-    <div class="card section-head"><div><span class="eyebrow blue-text">YOUR ACCOUNT</span><h2 id="studentWelcome">Student account</h2><p id="studentEmail" class="muted"></p><p id="studentStatus" class="status pending">Pending approval</p></div><button id="studentLogout" class="soft-button">Sign Out</button></div>
-    <section class="student-welcome-image" aria-label="Student dashboard welcome image">
-      <div class="student-welcome-overlay"><span class="eyebrow">WELCOME TO YOUR STUDY SPACE</span><h2>Learn • Grow • Succeed</h2><p>Your journey to knowledge starts here.</p></div>
+    <section class="student-welcome-image account-background" aria-label="Student account over nature background">
+      <div class="account-overlay">
+        <div class="account-details">
+          <span class="eyebrow">YOUR ACCOUNT</span>
+          <h2 id="studentWelcome">Student account</h2>
+          <p id="studentEmail"> </p>
+          <p id="studentStatus" class="status pending">Pending approval</p>
+        </div>
+        <button id="studentLogout" class="soft-button account-signout" type="button">Sign Out</button>
+      </div>
     </section>
     <section class="card"><span class="eyebrow blue-text">YOUR STUDY SPACE</span><h2>Study Library</h2><p class="muted">Choose a semester to find your resources.</p>
       <div class="semester-tabs" id="studentSemesterTabs"></div><div id="studentMaterials" class="material-grid"></div>
