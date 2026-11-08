@@ -35,13 +35,13 @@
 body.auth-mode{background:#081c35;min-height:100vh}
 body.auth-mode .topbar,body.auth-mode .hero,body.auth-mode .music-card{display:none!important}
 body.auth-mode .wrap{max-width:none;margin:0;padding:0}
-body.auth-mode #authView{min-height:100vh;padding:36px 18px;align-items:center;background:linear-gradient(180deg,rgba(4,17,38,.12),rgba(4,17,38,.30)),url("assets/nature-sunrise-background.png") center center/cover fixed}
+body.auth-mode #authView{min-height:100vh;padding:36px 18px;align-items:center;background:linear-gradient(180deg,rgba(4,17,38,.12),rgba(4,17,38,.30)),url("assets/student-dashboard-background.png?v=2") center center/cover fixed}
 body.auth-mode .auth-card{width:min(100%,470px);padding:30px 32px;background:rgba(255,255,255,.88);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.72);border-radius:24px;box-shadow:0 24px 70px rgba(0,0,0,.28)}
 body.auth-mode .auth-card h2{color:#17246b}
 body.auth-mode .auth-card input{background:rgba(255,255,255,.94);border:1px solid #d6dced;border-radius:12px}
 body.auth-mode .primary{background:linear-gradient(100deg,#5365ff,#3428e8);border-radius:999px;box-shadow:0 7px 18px rgba(61,67,225,.24);font-weight:700}
 body.auth-mode .text-button{font-weight:700}
-.student-welcome-image{min-height:310px;margin:22px 0;border-radius:22px;overflow:hidden;position:relative;display:flex;align-items:flex-end;background:linear-gradient(90deg,rgba(3,22,34,.58),rgba(3,22,34,.05)),url("assets/student-dashboard-background.png") center 52%/cover;box-shadow:0 14px 34px rgba(19,49,78,.18)}
+.student-welcome-image{min-height:310px;margin:22px 0;border-radius:22px;overflow:hidden;position:relative;display:flex;align-items:flex-end;background:linear-gradient(90deg,rgba(3,22,34,.58),rgba(3,22,34,.05)),url("assets/student-dashboard-background.png?v=2") center 52%/cover;box-shadow:0 14px 34px rgba(19,49,78,.18)}
 .student-welcome-overlay{color:#fff;padding:30px 34px;text-shadow:0 2px 10px rgba(0,0,0,.35)}
 .student-welcome-overlay h2{font-size:clamp(28px,4vw,42px);margin:8px 0}
 .student-welcome-overlay p{margin:0;font-size:17px}
