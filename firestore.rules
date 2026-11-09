@@ -14,16 +14,7 @@ service cloud.firestore {
         userDoc(request.auth.uid).role == "student" &&
         userDoc(request.auth.uid).status == "approved";
     }
-    function ownsConversation(studentUid) {
-      return approvedStudent() && request.auth.uid == studentUid;
-    }
-    function validMessageText() {
-      return request.resource.data.text is string &&
-        request.resource.data.text.size() > 0 &&
-        request.resource.data.text.size() <= 2000;
-    }
 
-    // Existing user permissions — preserved.
     match /users/{uid} {
       allow create: if signedIn() && request.auth.uid == uid &&
         request.resource.data.keys().hasOnly(["name","email","role","status","createdAt"]) &&
@@ -39,13 +30,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Existing study-material permissions — preserved.
     match /materials/{id} {
       allow read: if isAdmin() || approvedStudent();
       allow create, update, delete: if isAdmin();
     }
 
-    // Existing student-presence permissions — preserved.
     match /presence/{uid} {
       allow create, update: if signedIn() && request.auth.uid == uid &&
         request.resource.data.uid == uid &&
@@ -54,7 +43,6 @@ service cloud.firestore {
       allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
-    // Existing login-history permissions — preserved.
     match /loginHistory/{id} {
       allow create: if signedIn() &&
         request.resource.data.uid == request.auth.uid &&
@@ -63,61 +51,73 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Ask the Admin: one conversation document per student.
-    // Suggested path: conversations/{studentUid}
+    // One private conversation document per student.
     match /conversations/{studentUid} {
-      allow create: if ownsConversation(studentUid) &&
-        request.resource.data.keys().hasOnly(["studentUid","studentName","studentEmail","createdAt","updatedAt"]) &&
+      allow read: if isAdmin() || (approvedStudent() && request.auth.uid == studentUid);
+      allow create: if approvedStudent() && request.auth.uid == studentUid &&
+        request.resource.data.keys().hasOnly([
+          "studentUid","studentName","studentEmail","lastMessage","lastSenderRole","updatedAt"
+        ]) &&
         request.resource.data.studentUid == studentUid &&
-        request.resource.data.studentName is string &&
-        request.resource.data.studentEmail == request.auth.token.email;
-      allow read: if isAdmin() || ownsConversation(studentUid);
+        request.resource.data.lastSenderRole == "student" &&
+        request.resource.data.lastMessage is string &&
+        request.resource.data.lastMessage.size() <= 2000;
       allow update: if isAdmin() ||
-        (ownsConversation(studentUid) &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(["updatedAt"]));
+        (approvedStudent() && request.auth.uid == studentUid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           "studentUid","studentName","studentEmail","lastMessage","lastSenderRole","updatedAt"
+         ]) &&
+         request.resource.data.studentUid == studentUid &&
+         request.resource.data.lastSenderRole == "student" &&
+         request.resource.data.lastMessage is string &&
+         request.resource.data.lastMessage.size() <= 2000);
       allow delete: if isAdmin();
 
-      // Messages are immutable after sending; read receipts are stored separately
-      // so students cannot read admin-only blue-tick information.
       match /messages/{messageId} {
-        allow read: if isAdmin() || ownsConversation(studentUid);
-        allow create: if (
-          ownsConversation(studentUid) &&
-          request.resource.data.keys().hasOnly(["senderUid","senderRole","text","createdAt"]) &&
-          request.resource.data.senderUid == request.auth.uid &&
-          request.resource.data.senderRole == "student" &&
-          validMessageText()
-        ) || (
-          isAdmin() &&
-          request.resource.data.keys().hasOnly(["senderUid","senderRole","text","createdAt"]) &&
-          request.resource.data.senderUid == request.auth.uid &&
-          request.resource.data.senderRole == "admin" &&
-          validMessageText() &&
-          exists(/databases/$(database)/documents/conversations/$(studentUid))
-        );
-        allow update, delete: if false;
-      }
+        allow read: if isAdmin() ||
+          (approvedStudent() && request.auth.uid == studentUid);
 
-      // Admin-only receipt records. A student may create a receipt only for an
-      // admin message; the admin may create one for a student message.
-      // Only the admin can read these records, so students never receive blue ticks.
-      match /adminReceipts/{messageId} {
-        allow read: if isAdmin();
-        allow create: if request.resource.data.keys().hasOnly(["messageId","readerUid","readerRole","readAt"]) &&
-          request.resource.data.messageId == messageId &&
-          request.resource.data.readAt is timestamp &&
-          ((isAdmin() &&
-            request.resource.data.readerUid == request.auth.uid &&
-            request.resource.data.readerRole == "admin") ||
-           (ownsConversation(studentUid) &&
-            request.resource.data.readerUid == request.auth.uid &&
-            request.resource.data.readerRole == "student" &&
-            get(/databases/$(database)/documents/conversations/$(studentUid)/messages/$(messageId)).data.senderRole == "admin"));
-        allow update, delete: if false;
+        allow create: if
+          request.resource.data.keys().hasOnly([
+            "text","senderUid","senderRole","createdAt","readByAdmin","readByStudent"
+          ]) &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 &&
+          request.resource.data.text.size() <= 2000 &&
+          request.resource.data.createdAt == request.time &&
+          request.resource.data.readByAdmin == false &&
+          request.resource.data.readByStudent == false &&
+          (
+            (approvedStudent() &&
+             request.auth.uid == studentUid &&
+             request.resource.data.senderUid == request.auth.uid &&
+             request.resource.data.senderRole == "student")
+            ||
+            (isAdmin() &&
+             request.resource.data.senderUid == request.auth.uid &&
+             request.resource.data.senderRole == "admin")
+          );
+
+        // Admin alone marks a student's message as read.
+        // The student can mark an admin reply as read; only admin UI displays the blue tick.
+        allow update: if
+          (isAdmin() &&
+           resource.data.senderRole == "student" &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readByAdmin"]) &&
+           request.resource.data.readByAdmin == true)
+          ||
+          (approvedStudent() &&
+           request.auth.uid == studentUid &&
+           resource.data.senderRole == "admin" &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readByStudent"]) &&
+           request.resource.data.readByStudent == true);
+
+        allow delete: if isAdmin();
       }
     }
 
-    // Deny everything else by default.
-    match /{document=**} { allow read, write: if false; }
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
