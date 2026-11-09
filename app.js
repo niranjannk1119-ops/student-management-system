@@ -79,20 +79,24 @@ async function renderStudent(profileData){
 async function renderAdmin(){
  showView("adminView");
  $("adminEmail").textContent=auth.currentUser?.email||"";
- const users=await getDocs(query(collection(db,"users"),limit(500)));
+ // Fetch the three independent dashboard datasets together so admin sign-in
+ // does not wait for users, presence, and materials one after another.
+ const [users,presenceSnap,materials]=await Promise.all([
+   getDocs(query(collection(db,"users"),limit(500))),
+   getDocs(query(collection(db,"presence"),limit(500))),
+   readMaterials()
+ ]);
  const students=users.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.role==="student");
  cachedStudents=students;
  const pending=students.filter(s=>s.status==="pending"),approved=students.filter(s=>s.status==="approved"),rejected=students.filter(s=>s.status==="rejected");
  $("studentCounts").textContent=`Pending: ${pending.length}  ·  Approved: ${approved.length}  ·  Rejected: ${rejected.length}`;
  const shown=students.filter(s=>s.status===selectedStudentStatus);
  $("studentList").innerHTML=shown.length?shown.map(s=>`<div class="list-item"><div><strong>${safe(s.name)}</strong><p>${safe(s.email)}</p><p>UID: ${safe(s.uid)}</p></div><div class="actions">${s.status==="pending"?`<button class="approve" data-review="${safe(s.uid)}" data-status="approved">Approve</button><button class="danger" data-review="${safe(s.uid)}" data-status="rejected">Reject</button>`:""}<details class="student-menu"><summary aria-label="Student options">⋮</summary><div class="student-menu-items"><button type="button" data-student-info="${safe(s.uid)}">Information</button><button type="button" data-student-edit="${safe(s.uid)}">Edit details</button>${s.status!=="pending"?`<button type="button" data-review="${safe(s.uid)}" data-status="pending">Move to Pending</button>`:""}<button type="button" class="menu-delete" data-student-delete="${safe(s.uid)}">Delete profile</button></div></details></div></div>`).join(""):'<div class="list-item">No students in this category.</div>';
- const presenceSnap=await getDocs(query(collection(db,"presence"),limit(500)));
  const presenceMap=new Map(presenceSnap.docs.map(d=>[d.id,d.data()]));
  const onlineNow=approved.filter(s=>isOnline(presenceMap.get(s.uid))).length;
  $("presenceTotal").textContent=String(approved.length);
  $("presenceOnline").textContent=String(onlineNow);
  $("presenceOffline").textContent=String(Math.max(0,approved.length-onlineNow));
- const materials=await readMaterials();
  const draw=()=>{semesterButtons("adminSemesterTabs",adminSemester,v=>{adminSemester=v;draw();});renderMaterialCards("adminMaterialCards",materials,adminSemester,true);};
  draw();
  $("adminMaterials").innerHTML=materials.length?materials.map(m=>`<div class="list-item"><div><strong>${safe(m.title)}</strong><p>Semester ${safe(m.semester)}</p></div><div class="actions"><a href="${safe(m.url)}" target="_blank" rel="noopener">Open PDF</a><button class="danger" data-delete-material="${safe(m.id)}">Delete</button></div></div>`).join(""):'<div class="list-item">No materials added yet.</div>';
@@ -158,7 +162,7 @@ $("loginForm").addEventListener("submit",async e=>{
  try{
   const email=$("loginEmail").value.trim().toLowerCase();
   const c=await signInWithEmailAndPassword(auth,email,$("loginPassword").value);
-  // Login history is useful, but must not delay authentication or dashboard display.
+  // Login history is saved in the background; it never blocks sign-in.
   recordLogin(c.user).catch(ex=>console.warn("Login history could not be saved:",ex));
   // onAuthStateChanged performs the single profile/approval check and renders the view.
  }catch(ex){notice(err(ex),true);}
