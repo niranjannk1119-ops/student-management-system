@@ -56,13 +56,28 @@ function renderMaterialCards(target,items,semester,admin=false){
  $(target).innerHTML=filtered.length?filtered.map(m=>`<article class="material-card"><h3>${safe(m.title)}</h3><p class="muted">Semester ${safe(m.semester)}</p><a href="${safe(m.url)}" target="_blank" rel="noopener">Open PDF ↗</a>${admin?` <button class="danger" data-delete-material="${safe(m.id)}">Delete</button>`:""}</article>`).join(""):'<div class="list-item">No study materials published for this semester yet.</div>';
 }
 async function renderStudent(profileData){
- profile=profileData; $("studentWelcome").textContent=profileData.name||"Student account";$("studentEmail").textContent=profileData.email||"";
- const approved=profileData.status==="approved";$("studentStatus").textContent=approved?"Approved":`Account ${profileData.status||"pending"}`;$("studentStatus").className="status "+(approved?"approved":"");
- const materials=approved?await readMaterials():[];
- const draw=()=>{semesterButtons("studentSemesterTabs",studentSemester,v=>{studentSemester=v;draw();});renderMaterialCards("studentMaterials",materials,studentSemester);};
- draw();showView("studentView");
+ profile=profileData;
+ $("studentWelcome").textContent=profileData.name||"Student account";
+ $("studentEmail").textContent=profileData.email||"";
+ const approved=profileData.status==="approved";
+ $("studentStatus").textContent=approved?"Approved":`Account ${profileData.status||"pending"}`;
+ $("studentStatus").className="status "+(approved?"approved":"");
+ // Show the dashboard immediately; load study materials after the first screen appears.
+ showView("studentView");
+ $("studentMaterials").innerHTML='<div class="list-item">Loading study materials…</div>';
+ semesterButtons("studentSemesterTabs",studentSemester,v=>{
+   studentSemester=v;
+   if(window.__studentMaterials) renderMaterialCards("studentMaterials",window.__studentMaterials,studentSemester);
+ });
+ if(!approved){$("studentMaterials").innerHTML='<div class="list-item">Your account is awaiting approval.</div>';return;}
+ try{
+   const materials=await readMaterials();
+   window.__studentMaterials=materials;
+   renderMaterialCards("studentMaterials",materials,studentSemester);
+ }catch(ex){$("studentMaterials").innerHTML=`<div class="list-item">${safe(err(ex))}</div>`;}
 }
 async function renderAdmin(){
+ showView("adminView");
  $("adminEmail").textContent=auth.currentUser?.email||"";
  const users=await getDocs(query(collection(db,"users"),limit(500)));
  const students=users.docs.map(d=>({uid:d.id,...d.data()})).filter(u=>u.role==="student");
@@ -87,14 +102,13 @@ async function recordLogin(user){
  await addDoc(collection(db,"loginHistory"),{uid:user.uid,email:user.email||"",at:serverTimestamp()});
 }
 
-async function updatePresence(user){
- const p=await getProfile(user.uid);
- await setDoc(doc(db,"presence",user.uid),{uid:user.uid,name:p?.name||"Student",email:user.email||"",lastSeen:serverTimestamp()},{merge:true});
+async function updatePresence(user, studentProfile=profile){
+ await setDoc(doc(db,"presence",user.uid),{uid:user.uid,name:studentProfile?.name||"Student",email:user.email||"",lastSeen:serverTimestamp()},{merge:true});
 }
-function onPresenceVisible(){if(document.visibilityState==="visible"&&auth.currentUser&&!isAdmin(auth.currentUser))updatePresence(auth.currentUser).catch(console.warn);}
-function startPresence(user){
- stopPresence(); updatePresence(user).catch(console.warn);
- presenceTimer=setInterval(()=>updatePresence(user).catch(console.warn),30000);
+function onPresenceVisible(){if(document.visibilityState==="visible"&&auth.currentUser&&!isAdmin(auth.currentUser))updatePresence(auth.currentUser,profile).catch(console.warn);}
+function startPresence(user, studentProfile){
+ stopPresence(); profile=studentProfile; updatePresence(user,studentProfile).catch(console.warn);
+ presenceTimer=setInterval(()=>updatePresence(user,studentProfile).catch(console.warn),30000);
  document.addEventListener("visibilitychange",onPresenceVisible);
 }
 function stopPresence(){
@@ -138,16 +152,17 @@ $("registerForm").addEventListener("submit",async e=>{
 });
 $("loginForm").addEventListener("submit",async e=>{
  e.preventDefault();
+ const submitButton=e.submitter||$("loginForm").querySelector('button[type="submit"]');
+ if(submitButton?.disabled) return;
+ if(submitButton){submitButton.disabled=true;submitButton.textContent="Signing in…";}
  try{
   const email=$("loginEmail").value.trim().toLowerCase();
   const c=await signInWithEmailAndPassword(auth,email,$("loginPassword").value);
-  await recordLogin(c.user);
-  if(isAdmin(c.user)){await renderAdmin();return;}
-  const p=await getProfile(c.user.uid);
-  if(!p||p.role!=="student"){await signOut(auth);return notice("Account profile not found. Contact the administrator.",true);}
-  if(p.status!=="approved"){await signOut(auth);return notice("Your registration is awaiting administrator approval.",true);}
-  await renderStudent(p);
+  // Login history is useful, but must not delay authentication or dashboard display.
+  recordLogin(c.user).catch(ex=>console.warn("Login history could not be saved:",ex));
+  // onAuthStateChanged performs the single profile/approval check and renders the view.
  }catch(ex){notice(err(ex),true);}
+ finally{if(submitButton){submitButton.disabled=false;submitButton.textContent="Sign In";}}
 });
 $("forgotForm").addEventListener("submit",async e=>{
  e.preventDefault();try{
@@ -263,5 +278,5 @@ $("musicStop").onclick=()=>{$("studyAudio").pause();$("studyAudio").currentTime=
 $("studyAudio").addEventListener("ended",()=>{$("musicStatus").textContent="Finished";$("musicPlay").textContent="▶ Play music";});
 onAuthStateChanged(auth,async user=>{
  if(!user){stopPresence();if(presenceRefreshTimer){clearInterval(presenceRefreshTimer);presenceRefreshTimer=null;}showView("authView");showForm("loginForm");return;}
- try{if(isAdmin(user)){stopPresence();await renderAdmin();if(presenceRefreshTimer)clearInterval(presenceRefreshTimer);presenceRefreshTimer=setInterval(()=>renderAdmin().catch(console.warn),60000);return;}if(presenceRefreshTimer){clearInterval(presenceRefreshTimer);presenceRefreshTimer=null;}const p=await getProfile(user.uid);if(!p||p.role!=="student"||p.status!=="approved"){await signOut(auth);showView("authView");showForm("loginForm");notice(p?.status==="pending"?"Your registration is awaiting administrator approval.":"Account profile not found. Contact the administrator.",true);return;}startPresence(user);await renderStudent(p);}catch(ex){await signOut(auth);showView("authView");showForm("loginForm");notice(err(ex),true);}
+ try{if(isAdmin(user)){stopPresence();await renderAdmin();if(presenceRefreshTimer)clearInterval(presenceRefreshTimer);presenceRefreshTimer=setInterval(()=>renderAdmin().catch(console.warn),60000);return;}if(presenceRefreshTimer){clearInterval(presenceRefreshTimer);presenceRefreshTimer=null;}const p=await getProfile(user.uid);if(!p||p.role!=="student"||p.status!=="approved"){await signOut(auth);showView("authView");showForm("loginForm");notice(p?.status==="pending"?"Your registration is awaiting administrator approval.":"Account profile not found. Contact the administrator.",true);return;}startPresence(user,p);await renderStudent(p);}catch(ex){await signOut(auth);showView("authView");showForm("loginForm");notice(err(ex),true);}
 });
