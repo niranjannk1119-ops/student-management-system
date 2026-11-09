@@ -5,7 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, getDoc, collection, query, getDocs,
-  addDoc, serverTimestamp, orderBy, limit, deleteDoc, where
+  addDoc, serverTimestamp, orderBy, limit, deleteDoc, where, onSnapshot, updateDoc
 } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -280,7 +280,138 @@ $("backToPresenceDashboard").onclick=()=>{$("presenceDetail").classList.add("hid
 $("musicPlay").onclick=async()=>{const a=$("studyAudio");if(a.paused){try{await a.play();$("musicStatus").textContent="Playing";$("musicPlay").textContent="Ⅱ Pause music";}catch(e){notice("Audio could not play. Check the supplied audio file.",true);}}else{a.pause();$("musicStatus").textContent="Paused";$("musicPlay").textContent="▶ Play music";}};
 $("musicStop").onclick=()=>{$("studyAudio").pause();$("studyAudio").currentTime=0;$("musicStatus").textContent="Stopped";$("musicPlay").textContent="▶ Play music";};
 $("studyAudio").addEventListener("ended",()=>{$("musicStatus").textContent="Finished";$("musicPlay").textContent="▶ Play music";});
+
+// ---------------- Ask the Admin: real-time student/admin messaging ----------------
+let chatUnsubMessages = null, chatUnsubConversations = null, activeChatUid = null;
+let chatIsOpen = false;
+function ensureChatUI(){
+ if(document.getElementById("chatLauncher")) return;
+ document.body.insertAdjacentHTML("beforeend", `
+  <button id="chatLauncher" class="chat-launcher" type="button" aria-label="Open messages">✉<span id="chatUnreadBadge" class="chat-unread-badge hidden">!</span></button>
+  <section id="chatPanel" class="chat-panel hidden" aria-label="Messages">
+   <header class="chat-header"><div><strong id="chatHeading">Ask the Admin</strong><small id="chatSubheading">Send a message</small></div><button id="chatClose" type="button" aria-label="Close messages">×</button></header>
+   <div id="chatConversationList" class="chat-conversation-list hidden"></div>
+   <div id="chatMessages" class="chat-messages"><p class="chat-empty">Loading messages…</p></div>
+   <form id="chatComposer" class="chat-composer"><textarea id="chatInput" rows="2" maxlength="2000" placeholder="Write your message…" required></textarea><button id="chatSend" type="submit">Send</button></form>
+   <p id="chatNote" class="chat-note">Note: Admin will see your message only when they open the app. Please don't worry if you don't receive an immediate reply. Thank you for your patience!</p>
+  </section>`);
+ $("chatLauncher").onclick=()=>toggleChat(true);
+ $("chatClose").onclick=()=>toggleChat(false);
+ $("chatComposer").addEventListener("submit",sendChatMessage);
+}
+function toggleChat(open){
+ chatIsOpen=open;
+ $("chatPanel").classList.toggle("hidden",!open);
+ $("chatLauncher").classList.toggle("chat-launcher-open",open);
+ if(open && isAdmin(auth.currentUser)) loadAdminConversations();
+}
+function stopChatListeners(){
+ if(chatUnsubMessages){chatUnsubMessages();chatUnsubMessages=null;}
+ if(chatUnsubConversations){chatUnsubConversations();chatUnsubConversations=null;}
+ activeChatUid=null;
+}
+function openStudentChat(){
+ stopChatListeners();
+ $("chatHeading").textContent="Ask the Admin";
+ $("chatSubheading").textContent="Private conversation with the administrator";
+ $("chatConversationList").classList.add("hidden");
+ $("chatMessages").classList.remove("hidden");
+ $("chatComposer").classList.remove("hidden");
+ $("chatNote").classList.remove("hidden");
+ const uid=auth.currentUser.uid; activeChatUid=uid;
+ const q=query(collection(db,"conversations",uid,"messages"),orderBy("createdAt","asc"),limit(200));
+ chatUnsubMessages=onSnapshot(q,snap=>{
+  const msgs=snap.docs.map(d=>({id:d.id,...d.data()}));
+  drawChatMessages(msgs,false);
+  // Mark admin replies as read. Students never see read receipts in the UI.
+  snap.docs.forEach(d=>{const m=d.data();if(m.senderRole==="admin"&&!m.readByStudent)updateDoc(d.ref,{readByStudent:true}).catch(console.warn);});
+ },e=>{$("chatMessages").innerHTML=`<p class="chat-empty">${safe(err(e))}</p>`;});
+}
+function loadAdminConversations(){
+ if(!isAdmin(auth.currentUser)) return;
+ if(chatUnsubConversations) chatUnsubConversations();
+ $("chatHeading").textContent="Student Messages";
+ $("chatSubheading").textContent="Choose a student to reply";
+ $("chatConversationList").classList.remove("hidden");
+ $("chatMessages").classList.remove("hidden");
+ $("chatComposer").classList.toggle("hidden",!activeChatUid);
+ $("chatNote").classList.add("hidden");
+ const q=query(collection(db,"conversations"),orderBy("updatedAt","desc"),limit(200));
+ chatUnsubConversations=onSnapshot(q,snap=>{
+  const rows=snap.docs.map(d=>({id:d.id,...d.data()}));
+  $("chatConversationList").innerHTML=rows.length?rows.map(c=>`<button type="button" class="chat-conversation ${activeChatUid===c.id?"active":""}" data-chat-uid="${safe(c.id)}"><strong>${safe(c.studentName||c.studentEmail||"Student")}</strong><small>${safe(c.lastMessage||"No messages yet")}</small></button>`).join(""):'<p class="chat-empty">No student messages yet.</p>';
+ },e=>{$("chatConversationList").innerHTML=`<p class="chat-empty">${safe(err(e))}</p>`;});
+ $("chatConversationList").onclick=e=>{
+  const b=e.target.closest("[data-chat-uid]");if(!b)return;
+  openAdminConversation(b.dataset.chatUid,b.querySelector("strong")?.textContent||"Student");
+ };
+}
+function openAdminConversation(uid,name){
+ if(!isAdmin(auth.currentUser))return;
+ if(chatUnsubMessages){chatUnsubMessages();chatUnsubMessages=null;}
+ activeChatUid=uid;
+ $("chatHeading").textContent=name;
+ $("chatSubheading").textContent="Conversation with student";
+ $("chatComposer").classList.remove("hidden");
+ $("chatNote").classList.add("hidden");
+ $("chatConversationList").querySelectorAll(".chat-conversation").forEach(b=>b.classList.toggle("active",b.dataset.chatUid===uid));
+ const q=query(collection(db,"conversations",uid,"messages"),orderBy("createdAt","asc"),limit(200));
+ chatUnsubMessages=onSnapshot(q,snap=>{
+  const msgs=snap.docs.map(d=>({id:d.id,...d.data()}));
+  drawChatMessages(msgs,true);
+  snap.docs.forEach(d=>{const m=d.data();if(m.senderRole==="student"&&!m.readByAdmin)updateDoc(d.ref,{readByAdmin:true}).catch(console.warn);});
+ },e=>{$("chatMessages").innerHTML=`<p class="chat-empty">${safe(err(e))}</p>`;});
+}
+function drawChatMessages(msgs,admin){
+ const box=$("chatMessages");
+ box.innerHTML=msgs.length?msgs.map(m=>{
+  const mine=admin?m.senderRole==="admin":m.senderRole==="student";
+  const time=m.createdAt?.toDate?.().toLocaleString?.()||"";
+  const ticks=admin?(m.senderRole==="admin"
+    ?(m.readByStudent?"<span class='chat-ticks read'>✓✓</span>":"<span class='chat-ticks'>✓</span>")
+    :(m.readByAdmin?"<span class='chat-ticks read'>✓✓</span>":"")):"";
+  return `<article class="chat-bubble ${mine?"mine":"theirs"}"><div>${safe(m.text)}</div><small>${safe(time)} ${ticks}</small></article>`;
+ }).join(""):'<p class="chat-empty">No messages yet. Start the conversation below.</p>';
+ box.scrollTop=box.scrollHeight;
+}
+async function sendChatMessage(e){
+ e.preventDefault();
+ const user=auth.currentUser, textValue=$("chatInput").value.trim();
+ if(!user||!textValue||textValue.length>2000)return;
+ const admin=isAdmin(user), uid=admin?activeChatUid:user.uid;
+ if(!uid){notice("Choose a student conversation first.",true);return;}
+ const btn=$("chatSend");btn.disabled=true;btn.textContent="Sending…";
+ try{
+  let student=admin?cachedStudents.find(s=>s.uid===uid):profile;
+  if(!student && admin) student=await getProfile(uid);
+  const msgRef=collection(db,"conversations",uid,"messages");
+  await addDoc(msgRef,{text:textValue,senderUid:user.uid,senderRole:admin?"admin":"student",createdAt:serverTimestamp(),readByAdmin:false,readByStudent:false});
+  await setDoc(doc(db,"conversations",uid),{
+   studentUid:uid,studentName:student?.name||"Student",studentEmail:student?.email||"",
+   lastMessage:textValue,lastSenderRole:admin?"admin":"student",updatedAt:serverTimestamp()
+  },{merge:true});
+  $("chatInput").value="";
+ }catch(ex){notice("Message could not be sent: "+err(ex),true);}
+ finally{btn.disabled=false;btn.textContent="Send";}
+}
+function setupChatForUser(user){
+ ensureChatUI();
+ stopChatListeners();
+ $("chatLauncher").classList.toggle("hidden",!user);
+ if(!user){toggleChat(false);return;}
+ if(isAdmin(user)){
+  $("chatNote").classList.add("hidden");
+  if(chatIsOpen)loadAdminConversations();
+ }else{
+  openStudentChat();
+  $("chatNote").classList.remove("hidden");
+ }
+}
+document.addEventListener("visibilitychange",()=>{
+ if(document.visibilityState==="visible"&&auth.currentUser&&!isAdmin(auth.currentUser)&&chatIsOpen)openStudentChat();
+});
+
 onAuthStateChanged(auth,async user=>{
- if(!user){stopPresence();if(presenceRefreshTimer){clearInterval(presenceRefreshTimer);presenceRefreshTimer=null;}showView("authView");showForm("loginForm");return;}
- try{if(isAdmin(user)){stopPresence();await renderAdmin();if(presenceRefreshTimer)clearInterval(presenceRefreshTimer);presenceRefreshTimer=setInterval(()=>renderAdmin().catch(console.warn),60000);return;}if(presenceRefreshTimer){clearInterval(presenceRefreshTimer);presenceRefreshTimer=null;}const p=await getProfile(user.uid);if(!p||p.role!=="student"||p.status!=="approved"){await signOut(auth);showView("authView");showForm("loginForm");notice(p?.status==="pending"?"Your registration is awaiting administrator approval.":"Account profile not found. Contact the administrator.",true);return;}startPresence(user,p);await renderStudent(p);}catch(ex){await signOut(auth);showView("authView");showForm("loginForm");notice(err(ex),true);}
+ if(!user){setupChatForUser(null);stopPresence();if(presenceRefreshTimer){clearInterval(presenceRefreshTimer);presenceRefreshTimer=null;}showView("authView");showForm("loginForm");return;}
+ try{setupChatForUser(user);if(isAdmin(user)){stopPresence();await renderAdmin();if(presenceRefreshTimer)clearInterval(presenceRefreshTimer);presenceRefreshTimer=setInterval(()=>renderAdmin().catch(console.warn),60000);return;}if(presenceRefreshTimer){clearInterval(presenceRefreshTimer);presenceRefreshTimer=null;}const p=await getProfile(user.uid);if(!p||p.role!=="student"||p.status!=="approved"){await signOut(auth);showView("authView");showForm("loginForm");notice(p?.status==="pending"?"Your registration is awaiting administrator approval.":"Account profile not found. Contact the administrator.",true);return;}startPresence(user,p);await renderStudent(p);}catch(ex){await signOut(auth);showView("authView");showForm("loginForm");notice(err(ex),true);}
 });
