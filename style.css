@@ -104,15 +104,15 @@ body.auth-mode .text-button{font-weight:700}
   }
 }
 
-/* Niru Study Notes: improve text contrast ONLY in the Learning Journey banner.
-   The original background image and all other sections remain unchanged. */
+/* Niru Study Notes: improve text contrast in the Learning Journey banner.
+   Keep the original background image sharp; do not blur it behind the text. */
 .student-dashboard-hero .hero-copy {
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.60);
   padding: 18px 22px;
   margin: 12px;
   border-radius: 16px;
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   text-shadow: none !important;
 }
 
