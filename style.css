@@ -155,19 +155,20 @@ body.auth-mode .text-button{font-weight:700}
 .chat-launcher-open { display: none !important; }
 .chat-unread-badge {
   position: absolute;
-  top: -3px;
-  right: -2px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
+  top: -4px;
+  right: -3px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
   display: grid;
   place-items: center;
   border: 2px solid #fff;
-  border-radius: 20px;
-  background: #e12d39;
+  border-radius: 999px;
+  background: #1769e0;
   color: #fff;
   font-size: 11px;
   font-weight: 700;
+  box-shadow: 0 3px 8px rgba(8, 62, 117, .35);
 }
 .chat-panel {
   position: fixed;
@@ -246,6 +247,7 @@ body.auth-mode .text-button{font-weight:700}
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   margin: 0 0 8px;
   padding: 13px 14px;
   border: 1px solid #e0e8f4;
@@ -263,6 +265,23 @@ body.auth-mode .text-button{font-weight:700}
 .chat-conversation:last-child { margin-bottom: 0; }
 .chat-conversation.active { border-color: #4c83df; background: #edf4ff; }
 .chat-conversation strong { display: block; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-item-unread {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #e8f1ff;
+  color: #0b4fb8;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.chat-blue-dot {
+  font-size: 10px;
+  line-height: 1;
+}
 .chat-messages {
   flex: 1 1 auto;
   min-height: 90px;
