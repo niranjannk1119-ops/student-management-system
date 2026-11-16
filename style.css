@@ -302,3 +302,18 @@ body.auth-mode .text-button{font-weight:700}
   .chat-panel { right: 10px; bottom: 10px; width: calc(100vw - 20px); height: min( min(650px, calc(100dvh - 20px)), 88dvh); border-radius: 16px; }
 }
 
+/* Additive message-management controls; existing chat styling remains intact. */
+.chat-header-actions{display:flex;align-items:center;gap:7px}
+.chat-header-actions button{width:34px;height:34px;border:0;border-radius:9px;background:rgba(255,255,255,.14);color:#fff;font-size:23px;line-height:1;cursor:pointer}
+.chat-header-actions #chatMenuBtn{font-weight:700}
+.chat-header-menu{position:absolute;right:58px;top:58px;z-index:10002;min-width:175px;padding:6px;background:#fff;border:1px solid #dbe5f4;border-radius:10px;box-shadow:0 12px 30px rgba(18,44,83,.2)}
+.chat-header-menu button{width:100%;padding:11px 12px;border:0;border-radius:7px;background:#fff;color:#b42332;text-align:left;cursor:pointer}
+.chat-header-menu button:hover{background:#fff1f1}
+.chat-panel{position:fixed}
+.chat-bubble{touch-action:pan-y}
+.chat-bubble.student-deleted-blue{border-color:#4d8fe8!important;background:#dcecff!important;color:#124b91!important}
+.chat-bubble.student-deleted-blue small{color:#2768b5}
+.chat-action-menu{position:fixed;z-index:11000;min-width:178px;padding:6px;display:grid;gap:3px;background:#fff;border:1px solid #dbe5f4;border-radius:11px;box-shadow:0 12px 32px rgba(18,44,83,.24)}
+.chat-action-menu button{width:100%;padding:10px 12px;border:0;border-radius:7px;background:#fff;color:#244365;text-align:left;cursor:pointer;font:inherit;font-size:14px}
+.chat-action-menu button:hover{background:#edf3ff}
+.chat-action-menu .menu-danger{color:#b42332}
