@@ -5,7 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, getDoc, collection, query, getDocs,
-  addDoc, serverTimestamp, orderBy, limit, deleteDoc, where, onSnapshot, updateDoc
+  addDoc, serverTimestamp, orderBy, limit, deleteDoc, where, onSnapshot, updateDoc, arrayUnion
 } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -289,7 +289,8 @@ function ensureChatUI(){
  document.body.insertAdjacentHTML("beforeend", `
   <button id="chatLauncher" class="chat-launcher" type="button" aria-label="Open messages">✉<span id="chatUnreadBadge" class="chat-unread-badge hidden">!</span></button>
   <section id="chatPanel" class="chat-panel hidden" aria-label="Messages">
-   <header class="chat-header"><div><strong id="chatHeading">Ask the Admin</strong><small id="chatSubheading">Send a message</small></div><button id="chatClose" type="button" aria-label="Close messages">×</button></header>
+   <header class="chat-header"><div><strong id="chatHeading">Ask the Admin</strong><small id="chatSubheading">Send a message</small></div><div class="chat-header-actions"><button id="chatMenuBtn" type="button" aria-label="Chat options">⋮</button><button id="chatClose" type="button" aria-label="Close messages">×</button></div></header>
+   <div id="chatHeaderMenu" class="chat-header-menu hidden"><button type="button" data-chat-action="clear">Clear chat for me</button></div>
    <div id="chatConversationList" class="chat-conversation-list hidden"></div>
    <div id="chatMessages" class="chat-messages"><p class="chat-empty">Loading messages…</p></div>
    <form id="chatComposer" class="chat-composer"><textarea id="chatInput" rows="2" maxlength="2000" placeholder="Write your message…" required></textarea><button id="chatSend" type="submit">Send</button></form>
@@ -297,7 +298,39 @@ function ensureChatUI(){
   </section>`);
  $("chatLauncher").onclick=()=>toggleChat(true);
  $("chatClose").onclick=()=>toggleChat(false);
+ $("chatMenuBtn").onclick=()=> $("chatHeaderMenu").classList.toggle("hidden");
+ $("chatHeaderMenu").addEventListener("click",async e=>{
+  const action=e.target.closest("[data-chat-action]")?.dataset.chatAction;
+  $("chatHeaderMenu").classList.add("hidden");
+  if(action==="clear") await clearChatForMe();
+ });
  $("chatComposer").addEventListener("submit",sendChatMessage);
+ const messageBox=$("chatMessages");
+ let pressTimer=null, pressStart=null;
+ const cancelPress=()=>{if(pressTimer){clearTimeout(pressTimer);pressTimer=null;}};
+ messageBox.addEventListener("pointerdown",e=>{
+  const bubble=e.target.closest("[data-message-id]");
+  if(!bubble) return;
+  cancelPress(); pressStart={x:e.clientX,y:e.clientY};
+  pressTimer=setTimeout(()=>{
+   pressTimer=null;
+   showMessageMenu(bubble.dataset.messageId, bubble.dataset.senderUid, bubble.dataset.messageText, e.clientX, e.clientY);
+  },550);
+ });
+ messageBox.addEventListener("pointermove",e=>{
+  if(pressStart && Math.hypot(e.clientX-pressStart.x,e.clientY-pressStart.y)>12) cancelPress();
+ });
+ ["pointerup","pointercancel","pointerleave"].forEach(type=>messageBox.addEventListener(type,cancelPress));
+ messageBox.addEventListener("contextmenu",e=>{
+  const bubble=e.target.closest("[data-message-id]");
+  if(!bubble) return;
+  e.preventDefault();
+  showMessageMenu(bubble.dataset.messageId,bubble.dataset.senderUid,bubble.dataset.messageText,e.clientX,e.clientY);
+ });
+ document.addEventListener("click",e=>{
+  if(!e.target.closest("#chatActionMenu")) closeMessageMenu();
+  if(!e.target.closest("#chatHeaderMenu")&&!e.target.closest("#chatMenuBtn")) $("chatHeaderMenu")?.classList.add("hidden");
+ });
 }
 function toggleChat(open){
  chatIsOpen=open;
@@ -363,16 +396,84 @@ function openAdminConversation(uid,name){
  },e=>{$("chatMessages").innerHTML=`<p class="chat-empty">${safe(err(e))}</p>`;});
 }
 function drawChatMessages(msgs,admin){
- const box=$("chatMessages");
- box.innerHTML=msgs.length?msgs.map(m=>{
+ const box=$("chatMessages"), currentUid=auth.currentUser?.uid;
+ const visible=msgs.filter(m=>!Array.isArray(m.hiddenFor)||!m.hiddenFor.includes(currentUid));
+ box.innerHTML=visible.length?visible.map(m=>{
   const mine=admin?m.senderRole==="admin":m.senderRole==="student";
   const time=m.createdAt?.toDate?.().toLocaleString?.()||"";
+  // Preserve the existing read-receipt behaviour exactly.
   const ticks=admin?(m.senderRole==="admin"
     ?(m.readByStudent?"<span class='chat-ticks read'>✓✓</span>":"<span class='chat-ticks'>✓</span>")
     :(m.readByAdmin?"<span class='chat-ticks read'>✓✓</span>":"")):"";
-  return `<article class="chat-bubble ${mine?"mine":"theirs"}"><div>${safe(m.text)}</div><small>${safe(time)} ${ticks}</small></article>`;
+  const blueDeleted=admin&&m.studentDeletedForMe;
+  const edited=m.editedAt?" · edited":"";
+  return `<article class="chat-bubble ${mine?"mine":"theirs"} ${blueDeleted?"student-deleted-blue":""}" data-message-id="${safe(m.id)}" data-sender-uid="${safe(m.senderUid)}" data-message-text="${safe(m.text)}"><div>${safe(m.text)}</div><small>${safe(time)}${edited} ${ticks}</small></article>`;
  }).join(""):'<p class="chat-empty">No messages yet. Start the conversation below.</p>';
  box.scrollTop=box.scrollHeight;
+}
+function closeMessageMenu(){
+ const menu=document.getElementById("chatActionMenu");
+ if(menu) menu.remove();
+}
+function showMessageMenu(messageId,senderUid,messageText,x,y){
+ closeMessageMenu();
+ const admin=isAdmin(auth.currentUser), own=senderUid===auth.currentUser?.uid;
+ const menu=document.createElement("div");
+ menu.id="chatActionMenu"; menu.className="chat-action-menu";
+ const options=[];
+ options.push(`<button type="button" data-message-action="hide">Delete for me</button>`);
+ if(admin){
+  options.push(`<button type="button" data-message-action="everyone" class="menu-danger">Delete for everyone</button>`);
+  options.push(`<button type="button" data-message-action="edit">Edit message</button>`);
+ }else if(own){
+  options.push(`<button type="button" data-message-action="edit">Edit message</button>`);
+ }
+ menu.innerHTML=options.join("");
+ document.body.appendChild(menu);
+ const left=Math.max(8,Math.min(x,window.innerWidth-190));
+ const top=Math.max(8,Math.min(y,window.innerHeight-menu.offsetHeight-8));
+ menu.style.left=left+"px"; menu.style.top=top+"px";
+ menu.addEventListener("click",async e=>{
+  const action=e.target.closest("[data-message-action]")?.dataset.messageAction;
+  if(!action)return;
+  closeMessageMenu();
+  const uid=activeChatUid;
+  const ref=doc(db,"conversations",uid,"messages",messageId);
+  try{
+   if(action==="hide"){
+    const patch={hiddenFor:arrayUnion(auth.currentUser.uid)};
+    if(!admin) patch.studentDeletedForMe=true;
+    await updateDoc(ref,patch);
+   }else if(action==="everyone"&&admin){
+    if(confirm("Delete this message for everyone?")) await deleteDoc(ref);
+   }else if(action==="edit"&&(admin||own)){
+    const next=prompt("Edit message:",messageText);
+    if(next===null)return;
+    const value=next.trim();
+    if(!value)return notice("Message cannot be empty.",true);
+    if(value.length>2000)return notice("Message must be 2000 characters or fewer.",true);
+    await updateDoc(ref,{text:value,editedAt:serverTimestamp()});
+   }
+  }catch(ex){notice("Message action failed: "+err(ex),true);}
+ });
+}
+async function clearChatForMe(){
+ const user=auth.currentUser, uid=isAdmin(user)?activeChatUid:user?.uid;
+ if(!user||!uid)return notice("Choose a student conversation first.",true);
+ if(!confirm("Clear this entire chat only for you? The other person will still see their messages."))return;
+ try{
+  const snap=await getDocs(query(collection(db,"conversations",uid,"messages"),orderBy("createdAt","asc")));
+  const docs=snap.docs;
+  for(let i=0;i<docs.length;i+=20){
+   const batch=docs.slice(i,i+20).map(d=>{
+    const patch={hiddenFor:arrayUnion(user.uid)};
+    if(!isAdmin(user))patch.studentDeletedForMe=true;
+    return updateDoc(d.ref,patch);
+   });
+   await Promise.all(batch);
+  }
+  notice("Chat cleared for you.");
+ }catch(ex){notice("Chat could not be cleared: "+err(ex),true);}
 }
 async function sendChatMessage(e){
  e.preventDefault();
