@@ -51,7 +51,6 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // One private conversation document per student.
     match /conversations/{studentUid} {
       allow read: if isAdmin() || (approvedStudent() && request.auth.uid == studentUid);
       allow create: if approvedStudent() && request.auth.uid == studentUid &&
@@ -98,8 +97,7 @@ service cloud.firestore {
              request.resource.data.senderRole == "admin")
           );
 
-        // Admin alone marks a student's message as read.
-        // The student can mark an admin reply as read; only admin UI displays the blue tick.
+        // Preserve the existing read-receipt permissions.
         allow update: if
           (isAdmin() &&
            resource.data.senderRole == "student" &&
@@ -110,8 +108,32 @@ service cloud.firestore {
            request.auth.uid == studentUid &&
            resource.data.senderRole == "admin" &&
            request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readByStudent"]) &&
-           request.resource.data.readByStudent == true);
+           request.resource.data.readByStudent == true)
+          ||
+          // A message sender may edit their own message; admin may edit any message.
+          ((isAdmin() ||
+            (approvedStudent() && request.auth.uid == studentUid &&
+             resource.data.senderUid == request.auth.uid)) &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(["text","editedAt"]) &&
+           request.resource.data.text is string &&
+           request.resource.data.text.size() > 0 &&
+           request.resource.data.text.size() <= 2000 &&
+           request.resource.data.editedAt == request.time)
+          ||
+          // Delete for me: only add the current user's UID to hiddenFor.
+          ((isAdmin() || (approvedStudent() && request.auth.uid == studentUid)) &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(["hiddenFor","studentDeletedForMe"]) &&
+           request.resource.data.get("hiddenFor", []) is list &&
+           request.resource.data.get("hiddenFor", []).hasAll(resource.data.get("hiddenFor", [])) &&
+           request.resource.data.get("hiddenFor", []).hasAll([request.auth.uid]) &&
+           (
+             (isAdmin() &&
+              !request.resource.data.diff(resource.data).affectedKeys().hasAny(["studentDeletedForMe"]))
+             ||
+             (!isAdmin() && request.resource.data.studentDeletedForMe == true)
+           ));
 
+        // Only admin can permanently delete a message for everyone.
         allow delete: if isAdmin();
       }
     }
