@@ -283,15 +283,95 @@ $("studyAudio").addEventListener("ended",()=>{$("musicStatus").textContent="Fini
 
 // ---------------- Ask the Admin: real-time student/admin messaging ----------------
 let chatUnsubMessages = null, chatUnsubConversations = null, activeChatUid = null;
-let chatIsOpen = false;
+let chatIsOpen = false, studentChatInThread = false;
+let adminUnreadListeners = new Map(), adminUnreadCounts = new Map();
+let adminConversationRows = [], studentUnreadCount = 0;
+
+function updateFloatingUnreadBadge(count){
+ const badge=$("chatUnreadBadge");
+ if(!badge) return;
+ const safeCount=Math.max(0,Number(count)||0);
+ if(safeCount>0){
+  badge.textContent=safeCount>99?"99+":String(safeCount);
+  badge.classList.remove("hidden");
+ }else{
+  badge.textContent="";
+  badge.classList.add("hidden");
+ }
+}
+
+function recalculateAdminTotalUnread(){
+ let total=0;
+ adminUnreadCounts.forEach(c=>{total+=c;});
+ updateFloatingUnreadBadge(total);
+}
+
+function stopAdminUnreadListeners(){
+ adminUnreadListeners.forEach(unsub=>{try{unsub();}catch(_){}});
+ adminUnreadListeners.clear();
+ adminUnreadCounts.clear();
+ updateFloatingUnreadBadge(0);
+}
+
+function renderAdminConversationList(){
+ const listEl=$("chatConversationList");
+ if(!listEl) return;
+ listEl.innerHTML=adminConversationRows.length?adminConversationRows.map(c=>{
+  const unread=adminUnreadCounts.get(c.id)||0;
+  const badgeHtml=unread>0?`<span class="chat-item-unread" aria-label="${unread} unread messages"><span class="chat-blue-dot">🔵</span> ${unread}</span>`:"";
+  return `<button type="button" class="chat-conversation ${activeChatUid===c.id?"active":""}" data-chat-uid="${safe(c.id)}"><strong>${safe(c.studentName||c.studentEmail||"Student")}</strong>${badgeHtml}</button>`;
+ }).join(""):'<p class="chat-empty">No student messages yet.</p>';
+}
+
+function renderStudentEntryList(){
+ const listEl=$("chatConversationList");
+ if(!listEl) return;
+ const badgeHtml=studentUnreadCount>0?`<span class="chat-item-unread" aria-label="${studentUnreadCount} unread messages"><span class="chat-blue-dot">🔵</span> ${studentUnreadCount}</span>`:"";
+ listEl.innerHTML=`<button type="button" class="chat-conversation" data-open-admin-thread="1"><strong>Admin</strong>${badgeHtml}</button>`;
+}
+
+function syncAdminUnreadWatchers(rows){
+ const activeIds=new Set(rows.map(r=>r.id));
+ for(const [uid,unsub] of adminUnreadListeners.entries()){
+  if(!activeIds.has(uid)){
+   try{unsub();}catch(_){}
+   adminUnreadListeners.delete(uid);
+   adminUnreadCounts.delete(uid);
+  }
+ }
+ for(const row of rows){
+  const uid=row.id;
+  if(adminUnreadListeners.has(uid)) continue;
+  const qUnread=query(
+   collection(db,"conversations",uid,"messages"),
+   where("senderRole","==","student"),
+   where("readByAdmin","==",false)
+  );
+  const unsub=onSnapshot(qUnread,snap=>{
+   const adminUid=auth.currentUser?.uid;
+   let count=0;
+   snap.docs.forEach(d=>{
+    const m=d.data();
+    if(Array.isArray(m.hiddenFor)&&adminUid&&m.hiddenFor.includes(adminUid)) return;
+    count++;
+   });
+   adminUnreadCounts.set(uid,count);
+   recalculateAdminTotalUnread();
+   renderAdminConversationList();
+  },errSnap=>console.warn("Unread listener error:",errSnap));
+  adminUnreadListeners.set(uid,unsub);
+ }
+ recalculateAdminTotalUnread();
+}
+
 function ensureChatUI(){
  if(document.getElementById("chatLauncher")) return;
  document.body.insertAdjacentHTML("beforeend", `
-  <button id="chatLauncher" class="chat-launcher" type="button" aria-label="Open messages">✉<span id="chatUnreadBadge" class="chat-unread-badge hidden">!</span></button>
+  <button id="chatLauncher" class="chat-launcher" type="button" aria-label="Open messages">✉<span id="chatUnreadBadge" class="chat-unread-badge hidden"></span></button>
   <section id="chatPanel" class="chat-panel hidden" aria-label="Messages">
    <header class="chat-header">
     <div class="chat-header-left">
-     <button id="chatBackBtn" class="hidden" type="button" aria-label="Back to student list">←</button>
+     <button id="chatBackBtn" class="hidden" type="button" aria-label="Back">←</button>
      <div><strong id="chatHeading">Ask the Admin</strong><small id="chatSubheading">Send a message</small></div>
     </div>
     <div class="chat-header-actions"><button id="chatMenuBtn" type="button" aria-label="Chat options">⋮</button><button id="chatClose" type="button" aria-label="Close messages">×</button></div>
@@ -304,7 +384,10 @@ function ensureChatUI(){
   </section>`);
  $("chatLauncher").onclick=()=>toggleChat(true);
  $("chatClose").onclick=()=>toggleChat(false);
- $("chatBackBtn").onclick=()=>showAdminStudentListView();
+ $("chatBackBtn").onclick=()=>{
+  if(isAdmin(auth.currentUser)) showAdminStudentListView();
+  else showStudentEntryView();
+ };
  $("chatMenuBtn").onclick=()=> $("chatHeaderMenu").classList.toggle("hidden");
  $("chatHeaderMenu").addEventListener("click",async e=>{
   const action=e.target.closest("[data-chat-action]")?.dataset.chatAction;
@@ -345,15 +428,29 @@ function toggleChat(open){
  $("chatLauncher").classList.toggle("chat-launcher-open",open);
  closeMessageMenu();
  $("chatHeaderMenu")?.classList.add("hidden");
- if(open && isAdmin(auth.currentUser)){
-  showAdminStudentListView();
-  loadAdminConversations();
+ if(open){
+  if(isAdmin(auth.currentUser)){
+   showAdminStudentListView();
+   loadAdminConversations();
+  }else if(auth.currentUser){
+   if(studentUnreadCount>0){
+    showStudentEntryView();
+   }else{
+    openStudentThreadView();
+   }
+  }
+ }else{
+  if(!isAdmin(auth.currentUser)) studentChatInThread=false;
  }
 }
 function stopChatListeners(){
  if(chatUnsubMessages){chatUnsubMessages();chatUnsubMessages=null;}
  if(chatUnsubConversations){chatUnsubConversations();chatUnsubConversations=null;}
+ stopAdminUnreadListeners();
  activeChatUid=null;
+ studentChatInThread=false;
+ studentUnreadCount=0;
+ adminConversationRows=[];
 }
 function showAdminStudentListView(){
  if(!isAdmin(auth.currentUser)) return;
@@ -370,11 +467,33 @@ function showAdminStudentListView(){
  $("chatMessages").classList.add("hidden");
  $("chatComposer").classList.add("hidden");
  $("chatNote").classList.add("hidden");
- $("chatConversationList").querySelectorAll(".chat-conversation").forEach(b=>b.classList.remove("active"));
+ renderAdminConversationList();
 }
-function openStudentChat(){
- stopChatListeners();
+function showStudentEntryView(){
+ if(isAdmin(auth.currentUser)) return;
+ studentChatInThread=false;
+ closeMessageMenu();
+ $("chatHeaderMenu")?.classList.add("hidden");
  $("chatBackBtn").classList.add("hidden");
+ $("chatMenuBtn").classList.add("hidden");
+ $("chatHeading").textContent="Messages";
+ $("chatSubheading").textContent="Tap Admin to read and reply";
+ $("chatConversationList").classList.remove("hidden");
+ $("chatConversationList").classList.add("full-list");
+ $("chatMessages").classList.add("hidden");
+ $("chatComposer").classList.add("hidden");
+ $("chatNote").classList.add("hidden");
+ renderStudentEntryList();
+ $("chatConversationList").onclick=e=>{
+  if(e.target.closest("[data-open-admin-thread]")) openStudentThreadView();
+ };
+}
+function openStudentThreadView(){
+ if(isAdmin(auth.currentUser)) return;
+ studentChatInThread=true;
+ closeMessageMenu();
+ $("chatHeaderMenu")?.classList.add("hidden");
+ $("chatBackBtn").classList.remove("hidden");
  $("chatMenuBtn").classList.remove("hidden");
  $("chatHeading").textContent="Ask the Admin";
  $("chatSubheading").textContent="Private conversation with the administrator";
@@ -383,23 +502,49 @@ function openStudentChat(){
  $("chatMessages").classList.remove("hidden");
  $("chatComposer").classList.remove("hidden");
  $("chatNote").classList.remove("hidden");
+ markAdminRepliesReadForStudent();
+}
+let latestStudentDocs=[];
+function markAdminRepliesReadForStudent(){
+ if(!chatIsOpen || !studentChatInThread || isAdmin(auth.currentUser)) return;
+ latestStudentDocs.forEach(d=>{
+  const m=d.data();
+  if(m.senderRole==="admin" && !m.readByStudent){
+   updateDoc(d.ref,{readByStudent:true}).catch(console.warn);
+  }
+ });
+}
+function openStudentChat(){
+ if(chatUnsubMessages){chatUnsubMessages();chatUnsubMessages=null;}
  const uid=auth.currentUser.uid; activeChatUid=uid;
  const q=query(collection(db,"conversations",uid,"messages"),orderBy("createdAt","asc"),limit(200));
  chatUnsubMessages=onSnapshot(q,snap=>{
+  latestStudentDocs=snap.docs;
   const msgs=snap.docs.map(d=>({id:d.id,...d.data()}));
+  let unread=0;
+  msgs.forEach(m=>{
+   if(Array.isArray(m.hiddenFor)&&m.hiddenFor.includes(uid)) return;
+   if(m.senderRole==="admin" && !m.readByStudent) unread++;
+  });
+  studentUnreadCount=unread;
+  updateFloatingUnreadBadge(unread);
+  if(!studentChatInThread) renderStudentEntryList();
   drawChatMessages(msgs,false);
-  // Mark admin replies as read. Students never see read receipts in the UI.
-  snap.docs.forEach(d=>{const m=d.data();if(m.senderRole==="admin"&&!m.readByStudent)updateDoc(d.ref,{readByStudent:true}).catch(console.warn);});
+  // Only mark admin replies as read when the student actually opens and views the conversation.
+  if(chatIsOpen && studentChatInThread){
+   markAdminRepliesReadForStudent();
+  }
  },e=>{$("chatMessages").innerHTML=`<p class="chat-empty">${safe(err(e))}</p>`;});
 }
 function loadAdminConversations(){
  if(!isAdmin(auth.currentUser)) return;
  if(chatUnsubConversations) chatUnsubConversations();
- showAdminStudentListView();
  const q=query(collection(db,"conversations"),orderBy("updatedAt","desc"),limit(200));
  chatUnsubConversations=onSnapshot(q,snap=>{
   const rows=snap.docs.map(d=>({id:d.id,...d.data()}));
-  $("chatConversationList").innerHTML=rows.length?rows.map(c=>`<button type="button" class="chat-conversation ${activeChatUid===c.id?"active":""}" data-chat-uid="${safe(c.id)}"><strong>${safe(c.studentName||c.studentEmail||"Student")}</strong></button>`).join(""):'<p class="chat-empty">No student messages yet.</p>';
+  adminConversationRows=rows;
+  syncAdminUnreadWatchers(rows);
+  renderAdminConversationList();
  },e=>{$("chatConversationList").innerHTML=`<p class="chat-empty">${safe(err(e))}</p>`;});
  $("chatConversationList").onclick=e=>{
   const b=e.target.closest("[data-chat-uid]");if(!b)return;
@@ -533,21 +678,28 @@ async function sendChatMessage(e){
 function setupChatForUser(user){
  ensureChatUI();
  stopChatListeners();
+ updateFloatingUnreadBadge(0);
  $("chatLauncher").classList.toggle("hidden",!user);
  if(!user){toggleChat(false);return;}
  if(isAdmin(user)){
   showAdminStudentListView();
-  if(chatIsOpen)loadAdminConversations();
+  // Start real-time conversation & unread listeners immediately so badge updates even while chat panel is closed.
+  loadAdminConversations();
  }else{
   openStudentChat();
-  $("chatNote").classList.remove("hidden");
+  if(chatIsOpen){
+   if(studentUnreadCount>0) showStudentEntryView();
+   else openStudentThreadView();
+  }
  }
 }
 document.addEventListener("visibilitychange",()=>{
- if(document.visibilityState==="visible"&&auth.currentUser&&!isAdmin(auth.currentUser)&&chatIsOpen)openStudentChat();
+ if(document.visibilityState==="visible"&&auth.currentUser&&!isAdmin(auth.currentUser)&&chatIsOpen&&studentChatInThread){
+  markAdminRepliesReadForStudent();
+ }
 });
 
 onAuthStateChanged(auth,async user=>{
  if(!user){setupChatForUser(null);stopPresence();if(presenceRefreshTimer){clearInterval(presenceRefreshTimer);presenceRefreshTimer=null;}showView("authView");showForm("loginForm");return;}
- try{setupChatForUser(user);if(isAdmin(user)){stopPresence();await renderAdmin();if(presenceRefreshTimer)clearInterval(presenceRefreshTimer);presenceRefreshTimer=setInterval(()=>renderAdmin().catch(console.warn),60000);return;}if(presenceRefreshTimer){clearInterval(presenceRefreshTimer);presenceRefreshTimer=null;}const p=await getProfile(user.uid);if(!p||p.role!=="student"||p.status!=="approved"){await signOut(auth);showView("authView");showForm("loginForm");notice(p?.status==="pending"?"Your registration is awaiting administrator approval.":"Account profile not found. Contact the administrator.",true);return;}startPresence(user,p);await renderStudent(p);}catch(ex){await signOut(auth);showView("authView");showForm("loginForm");notice(err(ex),true);}
+ try{if(isAdmin(user)){setupChatForUser(user);stopPresence();await renderAdmin();if(presenceRefreshTimer)clearInterval(presenceRefreshTimer);presenceRefreshTimer=setInterval(()=>renderAdmin().catch(console.warn),60000);return;}if(presenceRefreshTimer){clearInterval(presenceRefreshTimer);presenceRefreshTimer=null;}const p=await getProfile(user.uid);if(!p||p.role!=="student"||p.status!=="approved"){setupChatForUser(null);await signOut(auth);showView("authView");showForm("loginForm");notice(p?.status==="pending"?"Your registration is awaiting administrator approval.":"Account profile not found. Contact the administrator.",true);return;}setupChatForUser(user);startPresence(user,p);await renderStudent(p);}catch(ex){setupChatForUser(null);await signOut(auth);showView("authView");showForm("loginForm");notice(err(ex),true);}
 });
