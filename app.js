@@ -289,7 +289,13 @@ function ensureChatUI(){
  document.body.insertAdjacentHTML("beforeend", `
   <button id="chatLauncher" class="chat-launcher" type="button" aria-label="Open messages">✉<span id="chatUnreadBadge" class="chat-unread-badge hidden">!</span></button>
   <section id="chatPanel" class="chat-panel hidden" aria-label="Messages">
-   <header class="chat-header"><div><strong id="chatHeading">Ask the Admin</strong><small id="chatSubheading">Send a message</small></div><div class="chat-header-actions"><button id="chatMenuBtn" type="button" aria-label="Chat options">⋮</button><button id="chatClose" type="button" aria-label="Close messages">×</button></div></header>
+   <header class="chat-header">
+    <div class="chat-header-left">
+     <button id="chatBackBtn" class="hidden" type="button" aria-label="Back to student list">←</button>
+     <div><strong id="chatHeading">Ask the Admin</strong><small id="chatSubheading">Send a message</small></div>
+    </div>
+    <div class="chat-header-actions"><button id="chatMenuBtn" type="button" aria-label="Chat options">⋮</button><button id="chatClose" type="button" aria-label="Close messages">×</button></div>
+   </header>
    <div id="chatHeaderMenu" class="chat-header-menu hidden"><button type="button" data-chat-action="clear">Clear chat for me</button></div>
    <div id="chatConversationList" class="chat-conversation-list hidden"></div>
    <div id="chatMessages" class="chat-messages"><p class="chat-empty">Loading messages…</p></div>
@@ -298,6 +304,7 @@ function ensureChatUI(){
   </section>`);
  $("chatLauncher").onclick=()=>toggleChat(true);
  $("chatClose").onclick=()=>toggleChat(false);
+ $("chatBackBtn").onclick=()=>showAdminStudentListView();
  $("chatMenuBtn").onclick=()=> $("chatHeaderMenu").classList.toggle("hidden");
  $("chatHeaderMenu").addEventListener("click",async e=>{
   const action=e.target.closest("[data-chat-action]")?.dataset.chatAction;
@@ -336,18 +343,43 @@ function toggleChat(open){
  chatIsOpen=open;
  $("chatPanel").classList.toggle("hidden",!open);
  $("chatLauncher").classList.toggle("chat-launcher-open",open);
- if(open && isAdmin(auth.currentUser)) loadAdminConversations();
+ closeMessageMenu();
+ $("chatHeaderMenu")?.classList.add("hidden");
+ if(open && isAdmin(auth.currentUser)){
+  showAdminStudentListView();
+  loadAdminConversations();
+ }
 }
 function stopChatListeners(){
  if(chatUnsubMessages){chatUnsubMessages();chatUnsubMessages=null;}
  if(chatUnsubConversations){chatUnsubConversations();chatUnsubConversations=null;}
  activeChatUid=null;
 }
+function showAdminStudentListView(){
+ if(!isAdmin(auth.currentUser)) return;
+ if(chatUnsubMessages){chatUnsubMessages();chatUnsubMessages=null;}
+ activeChatUid=null;
+ closeMessageMenu();
+ $("chatHeaderMenu")?.classList.add("hidden");
+ $("chatBackBtn").classList.add("hidden");
+ $("chatHeading").textContent="Student Messages";
+ $("chatSubheading").textContent="Select a student to view messages";
+ $("chatMenuBtn").classList.add("hidden");
+ $("chatConversationList").classList.remove("hidden");
+ $("chatConversationList").classList.add("full-list");
+ $("chatMessages").classList.add("hidden");
+ $("chatComposer").classList.add("hidden");
+ $("chatNote").classList.add("hidden");
+ $("chatConversationList").querySelectorAll(".chat-conversation").forEach(b=>b.classList.remove("active"));
+}
 function openStudentChat(){
  stopChatListeners();
+ $("chatBackBtn").classList.add("hidden");
+ $("chatMenuBtn").classList.remove("hidden");
  $("chatHeading").textContent="Ask the Admin";
  $("chatSubheading").textContent="Private conversation with the administrator";
  $("chatConversationList").classList.add("hidden");
+ $("chatConversationList").classList.remove("full-list");
  $("chatMessages").classList.remove("hidden");
  $("chatComposer").classList.remove("hidden");
  $("chatNote").classList.remove("hidden");
@@ -363,16 +395,11 @@ function openStudentChat(){
 function loadAdminConversations(){
  if(!isAdmin(auth.currentUser)) return;
  if(chatUnsubConversations) chatUnsubConversations();
- $("chatHeading").textContent="Student Messages";
- $("chatSubheading").textContent="Choose a student to reply";
- $("chatConversationList").classList.remove("hidden");
- $("chatMessages").classList.remove("hidden");
- $("chatComposer").classList.toggle("hidden",!activeChatUid);
- $("chatNote").classList.add("hidden");
+ showAdminStudentListView();
  const q=query(collection(db,"conversations"),orderBy("updatedAt","desc"),limit(200));
  chatUnsubConversations=onSnapshot(q,snap=>{
   const rows=snap.docs.map(d=>({id:d.id,...d.data()}));
-  $("chatConversationList").innerHTML=rows.length?rows.map(c=>`<button type="button" class="chat-conversation ${activeChatUid===c.id?"active":""}" data-chat-uid="${safe(c.id)}"><strong>${safe(c.studentName||c.studentEmail||"Student")}</strong><small>${safe(c.lastMessage||"No messages yet")}</small></button>`).join(""):'<p class="chat-empty">No student messages yet.</p>';
+  $("chatConversationList").innerHTML=rows.length?rows.map(c=>`<button type="button" class="chat-conversation ${activeChatUid===c.id?"active":""}" data-chat-uid="${safe(c.id)}"><strong>${safe(c.studentName||c.studentEmail||"Student")}</strong></button>`).join(""):'<p class="chat-empty">No student messages yet.</p>';
  },e=>{$("chatConversationList").innerHTML=`<p class="chat-empty">${safe(err(e))}</p>`;});
  $("chatConversationList").onclick=e=>{
   const b=e.target.closest("[data-chat-uid]");if(!b)return;
@@ -383,11 +410,18 @@ function openAdminConversation(uid,name){
  if(!isAdmin(auth.currentUser))return;
  if(chatUnsubMessages){chatUnsubMessages();chatUnsubMessages=null;}
  activeChatUid=uid;
+ closeMessageMenu();
+ $("chatHeaderMenu")?.classList.add("hidden");
+ $("chatBackBtn").classList.remove("hidden");
+ $("chatMenuBtn").classList.remove("hidden");
  $("chatHeading").textContent=name;
- $("chatSubheading").textContent="Conversation with student";
+ $("chatSubheading").textContent="Private conversation";
+ $("chatConversationList").classList.add("hidden");
+ $("chatConversationList").classList.remove("full-list");
+ $("chatMessages").classList.remove("hidden");
  $("chatComposer").classList.remove("hidden");
  $("chatNote").classList.add("hidden");
- $("chatConversationList").querySelectorAll(".chat-conversation").forEach(b=>b.classList.toggle("active",b.dataset.chatUid===uid));
+ $("chatMessages").innerHTML='<p class="chat-empty">Loading messages…</p>';
  const q=query(collection(db,"conversations",uid,"messages"),orderBy("createdAt","asc"),limit(200));
  chatUnsubMessages=onSnapshot(q,snap=>{
   const msgs=snap.docs.map(d=>({id:d.id,...d.data()}));
@@ -406,7 +440,8 @@ function drawChatMessages(msgs,admin){
     ?(m.readByStudent?"<span class='chat-ticks read'>✓✓</span>":"<span class='chat-ticks'>✓</span>")
     :(m.readByAdmin?"<span class='chat-ticks read'>✓✓</span>":"")):"";
   const blueDeleted=admin&&m.studentDeletedForMe;
-  const edited=m.editedAt?" · edited":"";
+  // Show "Edited" only to the admin; students see only normal date/time.
+  const edited=(admin&&m.editedAt)?" · Edited":"";
   return `<article class="chat-bubble ${mine?"mine":"theirs"} ${blueDeleted?"student-deleted-blue":""}" data-message-id="${safe(m.id)}" data-sender-uid="${safe(m.senderUid)}" data-message-text="${safe(m.text)}"><div>${safe(m.text)}</div><small>${safe(time)}${edited} ${ticks}</small></article>`;
  }).join(""):'<p class="chat-empty">No messages yet. Start the conversation below.</p>';
  box.scrollTop=box.scrollHeight;
@@ -501,7 +536,7 @@ function setupChatForUser(user){
  $("chatLauncher").classList.toggle("hidden",!user);
  if(!user){toggleChat(false);return;}
  if(isAdmin(user)){
-  $("chatNote").classList.add("hidden");
+  showAdminStudentListView();
   if(chatIsOpen)loadAdminConversations();
  }else{
   openStudentChat();
