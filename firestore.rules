@@ -130,7 +130,9 @@ service cloud.firestore {
              (isAdmin() &&
               !request.resource.data.diff(resource.data).affectedKeys().hasAny(["studentDeletedForMe"]))
              ||
-             (!isAdmin() && request.resource.data.studentDeletedForMe == true)
+             (approvedStudent() &&
+              request.auth.uid == studentUid &&
+              request.resource.data.studentDeletedForMe == true)
            ));
 
         // Only admin can permanently delete a message for everyone.
